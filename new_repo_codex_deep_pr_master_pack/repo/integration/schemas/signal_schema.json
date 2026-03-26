@@ -1,0 +1,21 @@
+{
+  "schema_version": "signal_v1",
+  "required": ["ts", "wallet", "mint", "decision"],
+  "fields": {
+    "schema_version": {"type": "string", "optional": true, "allowed": ["signal_v1"]},
+    "signal_id": {"type": "string", "optional": true},
+    "ts": {"type": "string"},
+    "wallet": {"type": "string", "min_length": 3},
+    "mint": {"type": "string", "min_length": 3},
+    "mode": {"type": "string", "optional": true},
+    "decision": {"type": "string", "allowed": ["ENTER", "SKIP"]},
+    "reject_reason": {"type": "string", "optional": true},
+    "entry_price": {"type": "number", "optional": true, "constraints": {"gt": 0}},
+    "limit_price": {"type": "number", "optional": true, "constraints": {"gt": 0}},
+    "ttl_sec": {"type": "integer", "optional": true, "constraints": {"ge": 0}},
+    "max_slippage_bps": {"type": "number", "optional": true, "constraints": {"ge": 0}},
+    "p_model": {"type": "number", "optional": true},
+    "edge_raw": {"type": "number", "optional": true},
+    "edge_final": {"type": "number", "optional": true}
+  }
+}

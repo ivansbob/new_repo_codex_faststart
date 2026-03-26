@@ -1,0 +1,77 @@
+manifest_version: "1.1"
+canonical_data_model: "docs/DATA_MODEL.md (v0.4)"
+
+# Compact machine-friendly manifest for Codex/tooling.
+# Mirrors docs/DATA_MODEL.md + schemas/clickhouse.sql + schemas/postgres.sql.
+
+clickhouse:
+  database: gmee
+  tables:
+    signals_raw:
+      tier: 0
+      purpose: "Raw incoming signals for replay/backfill/audit"
+    trade_attempts:
+      tier: 0
+      purpose: "Per-attempt audit record (fanout/nonce/idempotency) even if no confirm"
+    rpc_events:
+      tier: 0
+      purpose: "Per-RPC-arm telemetry for latency/epsilon, bandit, breaker, forensics"
+    trades:
+      tier: 0
+      purpose: "Per trade lifecycle (entry+exit) must-log row"
+    microticks_1s:
+      tier: 0
+      purpose: "1s snapshots in post-entry window only"
+    wallet_daily_agg_state:
+      tier: 0
+      purpose: "Daily aggregate states for rolling wallet profile"
+    latency_arm_state:
+      tier: 0
+      purpose: "Snapshot of epsilon/priors/breaker per RPC arm"
+    controller_state:
+      tier: 0
+      purpose: "Audit snapshots for controllers/gates/promotions"
+    provider_usage_daily:
+      tier: 0
+      purpose: "Daily cost/quota tracking by provider"
+    forensics_events:
+      tier: 0
+      purpose: "Append-only anomalies (reorg/suspect/time_skew/partial_confirm/etc)"
+
+  views:
+    wallet_profile_30d:
+      inputs: ["wallet_daily_agg_state"]
+      outputs:
+        - trades30d
+        - win30
+        - q10_hold_sec
+        - q25_hold_sec
+        - q40_hold_sec
+        - median_hold_sec
+        - avg_hold_sec
+        - hold_var_sec
+        - roi_avg_30d
+        - roi_var_30d
+        - updated_ts
+
+  materialized_views:
+    mv_wallet_daily_agg_state:
+      from: "trades"
+      to: "wallet_daily_agg_state"
+      quality_filter: "success_bool=1 AND failure_mode='none' AND hold_seconds>0 AND entry_confirm_quality='ok'"
+
+postgres:
+  tables:
+    configs:
+      purpose: "Canonical normalized YAML configs + hash"
+    experiment_registry:
+      purpose: "Reproducible runs: config_hash + seed + artifacts + metrics"
+    promotions_audit:
+      purpose: "Append-only signed promotion decisions"
+
+queries:
+  canonical_files:
+    - queries/01_profile_query.sql
+    - queries/02_routing_query.sql
+    - queries/03_microticks_window.sql
+    - queries/04_glue_select.sql
