@@ -1,0 +1,93 @@
+base_profiles:
+  U:
+    hold_sec_min: 15
+    hold_sec_max: 30
+    tp_pct: 3.0
+    sl_pct: -2.5
+    ttl_sec: 30
+  S:
+    hold_sec_min: 60
+    hold_sec_max: 90
+    tp_pct: 5.0
+    sl_pct: -4.5
+    ttl_sec: 90
+  M:
+    hold_sec_min: 120
+    hold_sec_max: 180
+    tp_pct: 9.0
+    sl_pct: -7.0
+    ttl_sec: 180
+  L:
+    hold_sec_min: 240
+    hold_sec_max: 300
+    tp_pct: 14.0
+    sl_pct: -10.0
+    ttl_sec: 300
+choose_mode:
+  U_if_median_hold_sec_lt: 40
+  S_if_median_hold_sec_lt: 100
+  M_if_median_hold_sec_lt: 220
+  else_mode: L
+  high_vol_30s_threshold: 0.08
+  if_high_vol_shift_towards: U
+  low_vol_30s_threshold: 0.02
+  if_low_vol_shift_towards: M
+aggressive:
+  enabled: true
+  safety_filters:
+    min_wallet_tier: tier1
+    min_wallet_winrate_30d: 0.6
+    min_wallet_roi_30d_pct: 25.0
+    min_liquidity_usd: 20000
+    max_spread_bps: 180
+    require_honeypot_pass: true
+    require_risk_regime_not_risk_off: true
+    require_not_in_cooldown: true
+    allowed_wallet_tiers:
+    - tier0
+    - tier1
+  triggers:
+    U:
+      require_price_change_pct: 3.0
+      within_sec: 15
+    S:
+      require_price_change_pct: 6.0
+      within_sec: 30
+    M:
+      require_price_change_pct: 10.0
+      within_sec: 90
+      require_follow_on_smart_money: true
+    L:
+      require_price_change_pct: 15.0
+      within_sec: 90
+      require_wallet_median_hold_sec_ge: 200
+  profiles:
+    U_aggr:
+      partial_take_profit_pct_of_pos: 40
+      partial_tp_pct: 3.5
+      runner_tp_pct: 25.0
+      runner_sl_pct: -7.0
+      trailing_stop_pct_from_peak: 12.0
+    S_aggr:
+      partial_take_profit_pct_of_pos: 50
+      partial_tp_pct: 7.0
+      runner_tp_pct: 50.0
+      runner_sl_pct: -12.0
+      trailing_stop_pct_from_peak: 12.0
+    M_aggr:
+      partial_take_profit_pct_of_pos: 40
+      partial_tp_pct: 12.0
+      runner_tp_pct: 100.0
+      runner_sl_pct: -20.0
+      trailing_stop_pct_from_peak: 15.0
+    L_aggr:
+      partial_take_profit_pct_of_pos: 35
+      partial_tp_pct: 18.0
+      runner_tp_pct: 180.0
+      runner_sl_pct: -30.0
+      trailing_stop_pct_from_peak: 20.0
+  limits:
+    max_aggr_trades_per_day: 10
+    max_aggr_exposure_pct_of_bankroll: 8.0
+    disable_aggr_if_aggr_drawdown_pct_ge: 12.0
+    disable_aggr_if_aggr_winrate_lt: 0.45

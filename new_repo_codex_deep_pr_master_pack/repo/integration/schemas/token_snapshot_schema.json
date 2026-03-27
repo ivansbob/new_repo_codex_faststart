@@ -1,0 +1,18 @@
+{
+  "schema_version": "token_snapshot_v1",
+  "required": ["ts", "mint"],
+  "fields": {
+    "schema_version": {"type": "string", "optional": true, "allowed": ["token_snapshot_v1"]},
+    "ts": {"type": "string"},
+    "mint": {"type": "string", "min_length": 3},
+    "price_usd": {"type": "number", "optional": true, "constraints": {"ge": 0}},
+    "liquidity_usd": {"type": "number", "optional": true, "constraints": {"ge": 0}},
+    "volume_5m_usd": {"type": "number", "optional": true, "constraints": {"ge": 0}},
+    "volume_1h_usd": {"type": "number", "optional": true, "constraints": {"ge": 0}},
+    "volume_24h_usd": {"type": "number", "optional": true, "constraints": {"ge": 0}},
+    "spread_bps": {"type": "number", "optional": true, "constraints": {"ge": 0}},
+    "depth_bps_100": {"type": "number", "optional": true, "constraints": {"ge": 0}},
+    "depth_bps_300": {"type": "number", "optional": true, "constraints": {"ge": 0}},
+    "honeypot_flag": {"types": ["number", "string"], "optional": true}
+  }
+}

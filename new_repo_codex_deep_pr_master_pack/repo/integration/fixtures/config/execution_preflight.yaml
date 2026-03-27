@@ -1,0 +1,34 @@
+version: "0.0"
+strategy_name: "execution-preflight-fixture"
+
+run:
+  timezone: "Europe/Riga"
+  mode: "paper"
+
+# Required subtrees for integration.config_loader.load_params_base
+wallet_profile: {}
+
+token_profile:
+  gates: {}
+  honeypot:
+    enabled: false
+
+signals: {}
+
+risk: {}
+
+execution: {}
+
+# PR-5 sim preflight minimal config (kept so --sim-preflight can run alongside)
+min_edge_bps: 0
+modes:
+  U:
+    tp_pct: 0.05
+    sl_pct: -0.05
+    hold_sec_max: 10
+
+# PR-6 deterministic execution preflight config
+execution_preflight:
+  max_slippage_bps: 50
+  ttl_sec: 10
+  slippage_bps: 72
