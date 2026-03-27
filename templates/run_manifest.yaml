@@ -1,0 +1,9 @@
+run:
+  experiment_id: ""
+  config_hash: ""
+  seed: 0
+  started_at_utc: ""
+  ended_at_utc: ""
+artifacts:
+  - name: "sim_results"
+    uri: ""

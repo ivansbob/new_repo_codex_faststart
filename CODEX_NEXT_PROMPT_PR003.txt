@@ -1,0 +1,6 @@
+Use the attached repo zip.
+
+Execute only PR-003: MOUNT-CANONICAL-STRATEGY-KERNEL.
+Read the detailed task file in `CODEX_PR_TASKS/PR-003_MOUNT-CANONICAL-STRATEGY-KERNEL.md`.
+Do not start PR-004.
+Return a new zip only.

@@ -1,0 +1,429 @@
+# config/params_base.yaml
+version: "3.0"
+strategy_name: "solana-copy-scalp"
+
+run:
+  timezone: "Europe/Riga"
+  mode: "paper"  # paper | sim | live
+  live_safety:
+    require_honeypot_pass: true
+    require_min_liquidity_pass: true
+    require_risk_limits_pass: true
+    require_rpc_health: true
+
+# Minimal defaults used by MVP_OFFLINE (safe to keep here even if prod config differs)
+defaults:
+  bankroll_usd: 10000
+  max_events: 100000
+
+# -----------------------------
+# 1) Wallet universe & profiling
+# -----------------------------
+wallet_profile:
+  universe:
+    max_wallets_total: 1500
+    live_track_wallets: 300
+    refresh_daily: true
+  filters:
+    lookback_days: 30
+    min_trades_30d: 50
+    min_roi_30d_pct: 20.0
+    min_winrate_30d: 0.60
+    min_avg_trade_size_sol: 0.20
+    min_wallet_age_days: 7
+  tiering:
+    tier0:
+      max_wallets: 50
+      min_roi_30d_pct: 40.0
+      min_winrate_30d: 0.65
+      min_trades_30d: 80
+    tier1:
+      max_wallets: 250
+      min_roi_30d_pct: 25.0
+      min_winrate_30d: 0.60
+      min_trades_30d: 50
+    tier2:
+      max_wallets: 1200
+      min_roi_30d_pct: 10.0
+      min_winrate_30d: 0.55
+      min_trades_30d: 30
+  clustering:
+    enabled: true
+    graph:
+      build_graph: true
+      lookback_days: 14
+      leader_min_indegree: 3
+      edge_rule: "co_trade_same_token_within_seconds"
+      co_trade_window_sec: 45
+    roles:
+      enable_role_labels: true
+      deployer_heuristics: true
+      sniper_heuristics: true
+      follower_heuristics: true
+
+# -----------------------------
+# 2) Token / pool profiling & hard gates
+# -----------------------------
+token_profile:
+  gates:
+    min_liquidity_usd: 15000
+    min_volume_24h_usd: 50000
+    max_spread_bps: 200
+    max_top10_holders_pct: 85
+    max_single_holder_pct: 35
+  honeypot:
+    enabled: true
+    reject_if_freeze_authority_present: true
+    reject_if_mint_authority_present: false
+    reject_if_blacklist_features_detected: true
+    reject_if_sell_tax_pct_ge: 50
+    reject_if_transfer_tax_pct_ge: 50
+    probe_trade:
+      enabled: false
+      max_probe_cost_usd: 3
+      probe_slippage_bps: 300
+      reject_if_sell_fails: true
+      reject_if_effective_tax_pct_ge: 35
+  dex_distribution_hint:
+    raydium_pct: 40
+    jupiter_pct: 30
+    pumpfun_pct: 20
+    meteora_pct: 10
+
+# -----------------------------
+# 3) Feature engineering
+# -----------------------------
+features:
+  windows_sec:
+    vol_30s: 30
+    vol_5m: 300
+    ret_30s: 30
+    ret_1m: 60
+    ret_5m: 300
+  include:
+    token_microstructure: true
+    wallet_stats: true
+    smart_money_counts: true
+    survival_exit_hazard: true
+  smart_money:
+    co_entry_window_sec: 30
+    min_co_entries_for_boost: 2
+
+# -----------------------------
+# 4) ML model & calibration
+# -----------------------------
+model:
+  type: "xgboost"  # logistic | xgboost | lightgbm
+  target:
+    horizon_sec: 300
+    label_threshold_roi_pct: 0.0
+  training:
+    lookback_days: 90
+    timeseries_splits: 5
+    min_samples: 5000
+    retrain:
+      enabled: true
+      cadence: "weekly"  # daily | weekly | manual
+  calibration:
+    method: "platt"  # platt | isotonic | none
+  thresholds:
+    p_model_min: 0.58
+    p_model_min_risk_off: 0.62
+    p_model_min_risk_on: 0.56
+
+# -----------------------------
+# 5) Signal engine (+EV, modes, aggressive)
+# -----------------------------
+signals:
+  ev:
+    enabled: true
+    edge_threshold_pct: 5.0
+    use_edge: false
+    assumed_costs:
+      slippage_bps: 80
+      fees_bps: 30
+      latency_bps: 60
+  hard_filters:
+    require_wallet_tier: ["tier0", "tier1", "tier2"]
+    min_wallet_winrate_30d: 0.55
+    min_wallet_roi_30d_pct: 10.0
+    require_token_gates_pass: true
+    require_honeypot_pass: true
+
+  modes:
+    base_profiles:
+      U:
+        hold_sec_min: 15
+        hold_sec_max: 30
+        tp_pct: 3.0
+        sl_pct: -2.5
+        ttl_sec: 30
+      S:
+        hold_sec_min: 60
+        hold_sec_max: 90
+        tp_pct: 5.0
+        sl_pct: -4.5
+        ttl_sec: 90
+      M:
+        hold_sec_min: 120
+        hold_sec_max: 180
+        tp_pct: 9.0
+        sl_pct: -7.0
+        ttl_sec: 180
+      L:
+        hold_sec_min: 240
+        hold_sec_max: 300
+        tp_pct: 14.0
+        sl_pct: -10.0
+        ttl_sec: 300
+
+    choose_mode:
+      U_if_median_hold_sec_lt: 40
+      S_if_median_hold_sec_lt: 100
+      M_if_median_hold_sec_lt: 220
+      else_mode: "L"
+      high_vol_30s_threshold: 0.08
+      if_high_vol_shift_towards: "U"
+      low_vol_30s_threshold: 0.02
+      if_low_vol_shift_towards: "M"
+
+    aggressive:
+      enabled: true
+      safety_filters:
+        min_wallet_tier: "tier1"
+        min_wallet_winrate_30d: 0.60
+        min_wallet_roi_30d_pct: 20.0
+        min_liquidity_usd: 20000
+        max_spread_bps: 180
+        require_honeypot_pass: true
+        require_risk_regime_not_risk_off: true
+        require_not_in_cooldown: true
+
+      triggers:
+        U: { require_price_change_pct: 3.0, within_sec: 15 }
+        S: { require_price_change_pct: 6.0, within_sec: 30 }
+        M: { require_price_change_pct: 10.0, within_sec: 60 }
+        L: { require_price_change_pct: 15.0, within_sec: 90 }
+
+      profiles:
+        U_aggr:
+          partial_take_profit_pct_of_pos: 40
+          partial_tp_pct: 3.5
+          runner_tp_pct: 25.0
+          runner_sl_pct: -7.0
+          trailing_stop_pct_from_peak: 12.0
+        S_aggr:
+          partial_take_profit_pct_of_pos: 50
+          partial_tp_pct: 7.0
+          runner_tp_pct: 50.0
+          runner_sl_pct: -12.0
+          trailing_stop_pct_from_peak: 12.0
+        M_aggr:
+          partial_take_profit_pct_of_pos: 40
+          partial_tp_pct: 12.0
+          runner_tp_pct: 100.0
+          runner_sl_pct: -20.0
+          trailing_stop_pct_from_peak: 15.0
+        L_aggr:
+          partial_take_profit_pct_of_pos: 35
+          partial_tp_pct: 18.0
+          runner_tp_pct: 180.0
+          runner_sl_pct: -30.0
+          trailing_stop_pct_from_peak: 20.0
+
+      limits:
+        max_aggr_trades_per_day: 10
+        max_aggr_exposure_pct_of_bankroll: 8.0
+        disable_aggr_if_aggr_drawdown_pct_ge: 12.0
+        disable_aggr_if_aggr_winrate_lt: 0.45
+
+  chain_reaction:
+    enabled: true
+    leader_min_indegree: 3
+    exit_hazard_threshold: 0.70
+    reaction_window_sec: 30
+    action: "tighten_sl_or_exit"  # tighten_sl_or_exit | immediate_exit | ignore
+
+# -----------------------------
+# 6) Risk regime overlay (optional)
+# -----------------------------
+polymarket:
+  enabled: true
+  refresh_sec: 60
+  regime:
+    risk_on_threshold: 0.25
+    risk_off_threshold: -0.25
+  adjustments:
+    size_multiplier_risk_on: 1.25
+    size_multiplier_risk_off: 0.60
+    max_open_positions_multiplier_risk_on: 1.20
+    max_open_positions_multiplier_risk_off: 0.70
+
+# -----------------------------
+# 7) Risk engine (Kelly, limits, kill-switch)
+# -----------------------------
+risk:
+  sizing:
+    method: "fractional_kelly"  # fixed_pct | fractional_kelly
+    fixed_pct_of_bankroll: 1.0
+    kelly_fraction: 0.25
+    min_pos_pct: 0.5
+    max_pos_pct: 2.0
+  proxy_edge:
+    enabled: true
+    p_model_baseline: 0.55
+    edge_per_0_01_p: 1.5
+  limits:
+    max_open_positions: 20
+    max_open_positions_per_dex: 8
+    max_exposure_per_token_pct: 10.0
+    max_exposure_per_wallet_source_pct: 12.0
+    max_daily_loss_pct: 7.0
+    max_drawdown_total_pct: 25.0
+    kill_switch_on_drawdown: true
+  cooldown:
+    enabled: true
+    trigger_after_consecutive_losses: 3
+    cooldown_minutes: 45
+    during_cooldown:
+      force_base_only: true
+      raise_p_model_min_by: 0.03
+
+# -----------------------------
+# 8) Execution simulator / order behavior
+# -----------------------------
+execution:
+  venue:
+    use_jupiter_routing: true
+    allowed_dex: ["raydium", "jupiter", "pumpfun", "meteora"]
+  orders:
+    default_order_type: "limit"  # limit | market
+    limit_price_buffer_bps: 50
+    max_slippage_bps: 200
+    allow_partial_fills: true
+  ttl:
+    default_ttl_sec: 120
+    per_mode_override: true
+  fees:
+    swap_fee_bps: 30
+    priority_fee_lamports: 0
+    mev_tip_sol: 0.0
+  mev:
+    jito_bundles:
+      enabled: false
+      max_tip_sol: 0.01
+      fallback_to_normal_tx: true
+  latency:
+    enabled: true
+    observe_delay_ms:
+      dist: "lognormal"
+      mean: 250
+      sigma: 0.40
+      clamp_min: 80
+      clamp_max: 900
+    submit_delay_ms:
+      dist: "lognormal"
+      mean: 700
+      sigma: 0.55
+      clamp_min: 200
+      clamp_max: 8000
+  slippage_model:
+    enabled: true
+    model: "amm_xyk"  # amm_xyk | constant_bps | hybrid
+    constant_bps: 80
+    impact_cap_bps: 200
+    impact_formula: "size_over_liquidity"
+  fill_model:
+    enabled: true
+    base_fill_rate: 0.80
+    penalty_per_1000ms_latency: 0.03
+    penalty_if_liquidity_below_min: 0.20
+    penalty_if_spread_above_max: 0.20
+
+# -----------------------------
+# 9) Backtest / Monte Carlo
+# -----------------------------
+backtest:
+  enabled: true
+  monte_carlo:
+    enabled: true
+    runs: 10000
+    shuffle_trades: true
+  metrics:
+    track_by_mode: true
+    track_by_dex: true
+    track_by_wallet_source: true
+  acceptance_targets:
+    min_fill_rate: 0.70
+    max_drawdown_pct: 25.0
+
+# -----------------------------
+# 10) Monitoring / exports
+# -----------------------------
+monitoring:
+  export:
+    to_csv: true
+    to_bigquery: false
+  telegram_alerts:
+    enabled: true
+    alert_on_drawdown_pct_ge: 5.0
+    alert_on_consecutive_losses_ge: 3
+    alert_on_rpc_failover: true
+  dashboard:
+    enabled: true
+    write_views:
+      signals: true
+      fills: true
+      pnl: true
+      latencies: true
+
+# -----------------------------
+# 11) Unified Decision Formula (continuous regime)
+# -----------------------------
+decision_formula:
+  enabled: true
+
+  # Polymarket -> regime scalar r in [-1..+1]
+  polymarket_regime:
+    # r = clip(a*(2*pm_bullish_score-1) - b*pm_event_risk, -1, +1)
+    a: 1.0
+    b: 1.0
+    clip_min: -1.0
+    clip_max: 1.0
+    fallback:
+      pm_bullish_score: 0.5
+      pm_event_risk: 0.0
+
+  # Dynamic thresholds as a function of r
+  thresholds:
+    # p_min(r) = p0 + k_p * (-r)
+    p0: 0.58
+    k_p: 0.03
+    # delta(r) in %: delta(r) = delta0_pct + k_delta_pct * (-r)
+    delta0_pct: 0.0
+    k_delta_pct: 1.5
+
+  # Size and capacity as a function of r
+  sizing:
+    # size_pct(r) = clamp(s0_pct*(1+k_s*r), min_pct, max_pct)
+    s0_pct: 1.0
+    k_s: 0.5
+    min_pct: 0.5
+    max_pct: 2.0
+
+  capacity:
+    # max_open(r) = round(M0*(1+k_m*r))
+    M0: 20
+    k_m: 0.5
+
+  # Expectancy priors used for EV when explicit edge is enabled (tune via backtests)
+  expectancy:
+    by_mode:
+      U: { mu_win_pct: 3.0,  mu_loss_pct: 2.5 }
+      S: { mu_win_pct: 5.0,  mu_loss_pct: 4.5 }
+      M: { mu_win_pct: 9.0,  mu_loss_pct: 7.0 }
+      L: { mu_win_pct: 14.0, mu_loss_pct: 10.0 }
+    by_tier_multiplier:
+      tier0: 1.10
+      tier1: 1.00
+      tier2: 0.90
