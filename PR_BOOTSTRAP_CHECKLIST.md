@@ -34,3 +34,4 @@ Establish mandatory CI security gates before any functional imports.
 ### Definition of done
 - Guard script is syntax-valid and runnable locally.
 - CI workflow invokes the guard script on push and pull request.
+- No unresolved merge-conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) in tracked files.

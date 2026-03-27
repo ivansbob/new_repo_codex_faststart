@@ -37,4 +37,11 @@ for required in HANDOFF_INTAKE.md PR_BOOTSTRAP_CHECKLIST.md; do
   [[ -f "$required" ]] || fail "Missing required doc: $required"
 done
 
+
+# 5) Block unresolved merge-conflict markers.
+if rg -n --hidden --glob '!.git' '^(<<<<<<<|=======|>>>>>>>)' . >/tmp/pr001_conflicts.txt; then
+  cat /tmp/pr001_conflicts.txt
+  fail "Unresolved merge-conflict markers detected"
+fi
+
 echo "[PASS] PR-001 security guard finished successfully"
