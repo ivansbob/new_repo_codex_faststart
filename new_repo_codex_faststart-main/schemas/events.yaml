@@ -1,0 +1,8 @@
+# Logical streams (topics) used by GMEE
+streams:
+  - signals_raw
+  - trades
+  - microticks_1s
+  - rpc_events
+  - sim_events
+  - experiment_registry

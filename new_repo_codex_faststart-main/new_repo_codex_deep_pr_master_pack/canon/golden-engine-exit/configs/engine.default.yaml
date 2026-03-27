@@ -1,0 +1,58 @@
+engine:
+  chain_key: chain
+  canonical_time:
+    order: [signal_time_utc, local_send_time_utc, first_confirm_time_utc]
+    monotonic_audit: true
+
+  mode:
+    by_avg_hold_sec:
+      U_max: 35
+      S_max: 130
+      M_max: 220
+
+  base_quantile:
+    U: q10
+    S: q25
+    M: q40
+    L: q40
+
+  exit_params:
+    margin_start: 0.85
+    margin_min: 0.60
+    margin_delta: -0.05
+    trailing_pct: 0.10
+    first_exit_signature_boost:
+      enabled: true
+
+  epsilon:
+    rule: "epsilon_sec = p90_entry_latency_sec + pad_sec"
+    pad_sec: 0.15
+
+  aggression:
+    triggers:
+      U: { pct: 3.0,  within_sec: 12 }
+      S: { pct: 6.0,  within_sec: 30 }
+      M: { pct: 10.0, within_sec: 60 }
+      L: { pct: 15.0, within_sec: 90 }
+    action:
+      cap_hold_to_window: true
+
+  idempotency:
+    enabled: true
+    dedupe_window_sec: 600
+    nonce_policy: "per_wallet_serialized"
+    retry_policy:
+      max_attempts: 3
+      backoff_ms: [150, 400, 900]
+
+  reorg_policy:
+    enabled: true
+    solana_commitment: "confirmed"
+    evm_confirmations: 2
+    quarantine_suspect_trades: true
+
+  circuit_breaker:
+    enabled: true
+    fail_rate_threshold: 0.15
+    p90_latency_multiplier: 2.0
+    cooldown_sec: 120

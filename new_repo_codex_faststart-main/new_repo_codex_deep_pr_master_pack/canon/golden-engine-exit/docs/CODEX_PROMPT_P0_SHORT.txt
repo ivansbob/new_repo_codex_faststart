@@ -1,0 +1,28 @@
+Ты реализуешь бизнес-код GMEE строго в рамках **P0 v0.4.1 (Variant A)**. P1/P2 ЗАПРЕЩЕНЫ.
+
+НЕ МЕНЯЙ: docs/**, configs/**, schemas/**, queries/**, scripts/**, CI workflow. Эти файлы — канон.
+
+Единственные источники чисел: configs/golden_exit_engine.yaml.
+Единственный read-API: configs/queries.yaml + queries/*.sql.
+Variant A: в queries/04_glue_select.sql ВСЕ пороги/epsilon/aggr/clamp/окна — только параметры {name:Type}. Никаких захардкоженных значений из YAML.
+
+СДЕЛАЙ ТОЛЬКО ЭТО (P0):
+1) Tier‑0 writer с жёстким ordering: signals_raw → trade_attempts → rpc_events → trades → microticks_1s.
+   - всегда заполняй must‑log IDs: trace_id, trade_id, attempt_id, idempotency_token, experiment_id, config_hash, env, chain
+   - enforce monotonic time: signal_time ≤ entry_local_send_time ≤ entry_first_confirm_time; иначе forensics_events(kind='time_skew')
+   - attempt_id: новый только если изменился payload_hash ИЛИ nonce_scope+nonce_value ИЛИ stage (entry/exit)
+
+2) compute_exit_plan(chain, trade_id):
+   - НЕ кодируй математику порогов в P0
+   - выполняй queries/04_glue_select.sql в ClickHouse с параметрами из YAML
+   - верни: mode, planned_hold_sec, epsilon_ms, planned_exit_ts, aggr_flag
+
+3) Записывай результат compute_exit_plan() в trades (поля mode/planned_hold_sec/epsilon_ms/planned_exit_ts/aggr_flag).
+
+4) Добавь интеграционный oracle‑тест на паритет:
+   - применить schemas/clickhouse.sql
+   - выполнить scripts/seed_golden_dataset.sql
+   - выполнить queries/04_glue_select.sql с параметрами из YAML
+   - сравнить TSV строго 1:1 с expected из CI
+
+Никаких новых фич. Если что-то падает — чини КОД, а не канон (SQL/YAML/DDL/доки).

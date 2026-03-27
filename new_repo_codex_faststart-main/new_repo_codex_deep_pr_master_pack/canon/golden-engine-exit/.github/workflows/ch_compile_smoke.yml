@@ -1,0 +1,127 @@
+name: ch-compile-smoke
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ch-compile-smoke:
+    runs-on: ubuntu-latest
+
+    services:
+      clickhouse:
+        image: clickhouse/clickhouse-server:24.3
+        ports:
+          - 8123:8123
+          - 9000:9000
+        options: >-
+          --ulimit nofile=262144:262144
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml
+
+      - name: Wait for ClickHouse
+        run: |
+          for i in $(seq 1 120); do
+            if curl -fsS "http://localhost:8123/ping" >/dev/null 2>&1; then
+              echo "ClickHouse is up"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "ClickHouse did not become ready in time"
+          exit 1
+
+      - name: Build CI params from YAML
+        run: |
+          python - <<'PY'
+          import yaml
+          from pathlib import Path
+
+          golden = yaml.safe_load(Path("configs/golden_exit_engine.yaml").read_text(encoding="utf-8"))
+          cd = golden["chain_defaults"]["solana"]
+
+          chain = "solana"
+          wallet = "wallet_ci_dummy"
+          trade_id = "00000000-0000-0000-0000-000000000011"
+
+          params = {
+            "chain": chain,
+            "wallet": wallet,
+            "trade_id": trade_id,
+            "window_s": int(cd["microticks"]["window_sec"]),
+            "microticks_window_s": int(cd["microticks"]["window_sec"]),
+            "min_hold_sec": int(cd["planned_hold"]["clamp_sec"]["min"]),
+            "max_hold_sec": int(cd["planned_hold"]["clamp_sec"]["max"]),
+            "mode_u_max_sec": int(cd["mode_thresholds_sec"]["U_max"]),
+            "mode_s_max_sec": int(cd["mode_thresholds_sec"]["S_max"]),
+            "mode_m_max_sec": int(cd["mode_thresholds_sec"]["M_max"]),
+            "margin_mult": float(cd["planned_hold"]["margin_mult_default"]),
+            "epsilon_pad_ms": int(cd["epsilon"]["pad_ms_default"]),
+            "epsilon_min_ms": int(cd["epsilon"]["hard_bounds_ms"]["min"]),
+            "epsilon_max_ms": int(cd["epsilon"]["hard_bounds_ms"]["max"]),
+            "aggr_u_up_pct": float(cd["aggr_triggers"]["U"]["up_pct"]),
+            "aggr_s_up_pct": float(cd["aggr_triggers"]["S"]["up_pct"]),
+            "aggr_m_up_pct": float(cd["aggr_triggers"]["M"]["up_pct"]),
+            "aggr_l_up_pct": float(cd["aggr_triggers"]["L"]["up_pct"]),
+            "aggr_u_window_s": int(cd["aggr_triggers"]["U"]["window_sec"]),
+            "aggr_s_window_s": int(cd["aggr_triggers"]["S"]["window_sec"]),
+            "aggr_m_window_s": int(cd["aggr_triggers"]["M"]["window_sec"]),
+            "aggr_l_window_s": int(cd["aggr_triggers"]["L"]["window_sec"]),
+          }
+
+          flags = [f"--param_{k}={v}" for k, v in params.items()]
+          Path("ci_params.flags").write_text(" ".join(flags), encoding="utf-8")
+          print("Wrote ci_params.flags")
+          PY
+
+      - name: Apply ClickHouse DDL (empty DB)
+        run: |
+          cat schemas/clickhouse.sql | docker run --rm --network host -i clickhouse/clickhouse-server:24.3             clickhouse-client --host 127.0.0.1 --port 9000 --multiquery
+
+      - name: Compile queries (EXPLAIN SYNTAX)
+        run: |
+          PARAMS="$(cat ci_params.flags)"
+          for q in queries/01_profile_query.sql queries/02_routing_query.sql queries/03_microticks_window.sql queries/04_glue_select.sql; do
+            echo "EXPLAIN SYNTAX $q"
+            docker run --rm --network host -i clickhouse/clickhouse-server:24.3               clickhouse-client --host 127.0.0.1 --port 9000 $PARAMS               --query "EXPLAIN SYNTAX $(cat $q)" >/dev/null
+          done
+
+      - name: Anti-drift gate (YAML ↔ SQL ↔ docs ↔ DDL)
+        run: |
+          python3 scripts/assert_no_drift.py
+
+      - name: Canary seed
+        run: |
+          cat scripts/canary_golden_trace.sql | docker run --rm --network host -i clickhouse/clickhouse-server:24.3             clickhouse-client --host 127.0.0.1 --port 9000 --multiquery
+
+      - name: Canary checks
+        run: |
+          cat scripts/canary_checks.sql | docker run --rm --network host -i clickhouse/clickhouse-server:24.3             clickhouse-client --host 127.0.0.1 --port 9000 --multiquery
+
+      - name: Oracle seed dataset
+        run: |
+          cat scripts/seed_golden_dataset.sql | docker run --rm --network host -i clickhouse/clickhouse-server:24.3             clickhouse-client --host 127.0.0.1 --port 9000 --multiquery
+
+      - name: Oracle test (04_glue_select TSV)
+        run: |
+          PARAMS="$(cat ci_params.flags)"
+          EXPECTED="$(cat scripts/oracle_expected.tsv)"
+          OUT="$(docker run --rm --network host -i clickhouse/clickhouse-server:24.3             clickhouse-client --host 127.0.0.1 --port 9000 --format=TSV $PARAMS             --query "$(cat queries/04_glue_select.sql)")"
+          echo "OUT=$OUT"
+          if [ "$OUT" != "$EXPECTED" ]; then
+            echo "ORACLE_FAIL: expected '$EXPECTED' but got '$OUT'"
+            exit 1
+          fi
+          echo "Oracle OK"

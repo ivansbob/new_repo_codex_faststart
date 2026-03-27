@@ -1,0 +1,51 @@
+rpc:
+  primary:
+    provider: helius
+    endpoint: https://rpc.helius.xyz/?api-key=YOUR_KEY
+    transport: https
+  secondary:
+    provider: alchemy
+    endpoint: https://solana-mainnet.g.alchemy.com/v2/YOUR_KEY
+    transport: https
+  public_fallback: https://api.mainnet-beta.solana.com
+streaming:
+  helius_webhooks:
+    enabled: true
+    note: Use for Tier-1 realtime. Keep within free-tier limits.
+dex_quotes:
+  jupiter_quote_api:
+    endpoint: https://quote-api.jup.ag/v6/quote
+    cache_ttl_sec: 5
+  raydium_docs: https://docs.raydium.io/
+  orca_docs: https://dev.orca.so/
+  meteora_docs: https://docs.meteora.ag/
+pricing:
+  pyth:
+    enabled: true
+    note: Use SOL/USD feed for qty_usd normalization.
+analytics_backfill:
+  dune:
+    enabled: true
+    note: Discovery/SQL; export via API or manual.
+  flipside:
+    enabled: false
+    note: Optional decoded data backfill.
+  bitquery:
+    enabled: false
+    note: Optional GraphQL backfill; pricing may change.
+token_risk_hints:
+  rugcheck:
+    enabled: false
+    note: External hint only; never SPOF.
+    url: https://rugcheck.xyz/
+polymarket:
+  enabled: true
+  poll_sec: 60
+  note: Read-only snapshots for risk_regime overlay.
+market_data_fallbacks:
+  dexscreener:
+    enabled: false
+    note: Optional fallback snapshots; do not rely on it.
+  geckoterminal:
+    enabled: false
+    note: Optional fallback snapshots; do not rely on it.

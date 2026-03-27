@@ -1,0 +1,61 @@
+# configs/golden_exit_engine.yaml
+# GMEE P0 config (v0.4) — Variant A (SQL04 fully parameterized)
+# Единственный источник чисел/порогов для P0.
+
+engine:
+  model_version: "gmee-v0.4"
+
+# TTL/retention (must match schemas/clickhouse.sql; validated by scripts/assert_no_drift.py)
+retention:
+  signals_raw_ttl_days: 180
+  rpc_events_ttl_days: 90
+  microticks_ttl_days: 60
+  trades_ttl_days: 0   # 0 = keep long; DDL must NOT set TTL for trades
+
+chain_defaults:
+  solana:
+    # режимы по avg_hold_sec (порог = upper bound)
+    mode_thresholds_sec:
+      U_max: 35
+      S_max: 130
+      M_max: 220
+      # L = иначе
+
+    # Контракт маппинга (дублируется в docs/CONTRACT_MATRIX.md и проверяется CI):
+    base_quantile_by_mode:
+      U: q10_hold_sec
+      S: q25_hold_sec
+      M: q40_hold_sec
+      L: median_hold_sec
+
+    planned_hold:
+      margin_mult_default: 1.0
+      clamp_sec:
+        min: 5
+        max: 900
+
+    epsilon:
+      # effective_epsilon_ms = clamp(routing_epsilon_ms + pad_ms_default, hard_bounds_ms.min..max)
+      pad_ms_default: 150
+      hard_bounds_ms:
+        min: 10
+        max: 2000
+
+    # post-entry runaway triggers (“убежала быстро”)
+    aggr_triggers:
+      U: { up_pct: 0.03, window_sec: 12 }
+      S: { up_pct: 0.06, window_sec: 30 }
+      M: { up_pct: 0.10, window_sec: 60 }
+      L: { up_pct: 0.15, window_sec: 90 }
+
+    microticks:
+      window_sec: 120
+      ttl_days: 60
+
+tier1_capture:
+  enabled: false
+  fields:
+    - tx_size_bytes
+    - dex_route
+    - broadcast_spread_ms
+    - mempool_size_at_send
